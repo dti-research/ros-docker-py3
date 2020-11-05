@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:16.04
 
 LABEL maintainer="Nicolai Anton Lynnerup nily@dti.dk"
 
@@ -8,12 +8,13 @@ ENV DEBIAN_FRONTEND="noninteractive" \
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # Variables for ROS distribution, configuration, and relevant directories
-ARG ROS_DISTRO="melodic"
-ARG ROS_CONFIG="ros_comm"
+ARG ROS_DISTRO="kinetic"
+ARG ROS_CONFIG="desktop_full"
 
 ENV CATKIN_WS="/usr/catkin_ws" \
     ROS_INSTALL_DIR="/opt/ros/$ROS_DISTRO" \
-    ROS_PYTHON_VERSION=3
+    ROS_PYTHON_VERSION=3\
+    ROS_DISTRO=${ROS_DISTRO}
 
 # Remove all py2 stuff
 RUN apt-get remove python-*
@@ -50,12 +51,10 @@ WORKDIR $CATKIN_WS
 
 RUN rosinstall_generator $ROS_CONFIG --rosdistro $ROS_DISTRO \
     --deps --tar > .rosinstall \
-    && wstool init -j8 src .rosinstall \
+    && wstool init -j$(nproc) src .rosinstall \
     && rosdep check --from-paths src --ignore-src | grep python | sed -e "s/^apt\t//g" | sed -z "s/\n/ /g" | sed -e "s/python/python3/g" \
     && rosdep install --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y \
-       --skip-keys="`rosdep check --from-paths src --ignore-src | grep python | sed -e "s/^apt\t//g" | sed -z "s/\n/ /g"`" \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+       --skip-keys="`rosdep check --from-paths src --ignore-src | grep python | sed -e "s/^apt\t//g" | sed -z "s/\n/ /g"`"
 
 RUN find . -type f -exec sed -i 's/\/usr\/bin\/env[ ]*python/\/usr\/bin\/env python3/g' {} +
 
@@ -68,7 +67,7 @@ RUN catkin init \
 # Let ROS know where all of the system python3 packages are installed.
 ENV PYTHONPATH=/usr/lib/python3/dist-packages
 
-WORKDIR /usr
+WORKDIR /
 RUN rm -rf $CATKIN_WS
 
 COPY ./entrypoint.sh .
